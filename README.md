@@ -46,7 +46,7 @@ Checks the server HO-EX2010-MB1 and outputs the results to the shell window.
 Checks all servers in the organization, outputs the results to the shell window, a HTML report, and emails the HTML report to the address configured in the script.
 
 ## More Information
-http://exchangeserverpro.com/powershell-script-health-check-report-exchange-2010
+http://exchangeserverpro.com/powershell-script-exchange-server-health-check-report
 
 ## Credits
 
