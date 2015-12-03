@@ -73,6 +73,7 @@ Additional Credits (code contributions and testing):
 - Tony Holdgate
 - Ryan
 - Rob Silver
+- Przemyslaw Obiala, Wojciech Sciesinski
 
 Change Log
 V1.00, 5/07/2012 - Initial version
@@ -100,6 +101,7 @@ V1.12, 5/03/2015 - Fixed bug with color-coding in report for Transport Queue len
 V1.13, 7/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
 V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
+V1.16, 03/12/2015 - Added checks for clients connections statistics per CAS servers
 #>
 
 #requires -version 2
@@ -137,15 +139,18 @@ param (
 $now = Get-Date											#Used for timestamps
 $date = $now.ToShortDateString()						#Short date format for email message subject
 [array]$exchangeservers = @()							#Array for the Exchange server or servers to check
+[int]$transportqueuewarn = 80                           #Change this to set transport queue warning threshold. Must be lower than high threshold.
 [int]$transportqueuehigh = 100							#Change this to set transport queue high threshold. Must be higher than warning threshold.
-[int]$transportqueuewarn = 80							#Change this to set transport queue warning threshold. Must be lower than high threshold.
+[int]$cascurrentrequestswarn = 4000                     #Change this to set clients connections to CAS warning threshold. Must be lower than high threshold.
+[int]$cascurrentrequestshigh = 200000                   #Change this to set clients connections to CAS high threshold. Must be higher than warning threshold.
 $mapitimeout = 10										#Timeout for each MAPI connectivity test, in seconds
 $pass = "Green"
 $warn = "Yellow"
 $fail = "Red"
 $ip = $null
 [array]$serversummary = @()								#Summary of issues found during server health checks
-[array]$dagsummary = @()								#Summary of issues found during DAG health checks
+[array]$dagsummary = @()                                #Summary of issues found during DAG health checks
+[array]$statisticssummary = @()                         #Summary of issues found during CAS connections statistics checks
 [array]$report = @()
 [bool]$alerts = $false
 [array]$dags = @()										#Array for DAG health check
@@ -1906,6 +1911,102 @@ else
 }
 ### End DAG Health Report
 
+### Begin Collect Clients Connections Statistics
+$tmpstring = "Collect Clients Connections Statistics"
+Write-Verbose $tmpstring
+
+if ($Log) {Write-LogFile $tmpstring}
+
+$ConnectionsStatistics=@()
+
+$clientaccessservers= $exchangeservers | Get-ExchangeServer | where {$_.ServerRole -like "*Client*"} | Sort-Object Name
+$clientaccessserverscount = ($clientaccessservers | measure).count
+
+if($clientaccessserverscount -gt 0)
+{
+    foreach ($srv in $clientaccessservers)
+    {
+		$tmpstring = "Collecting data for $($srv)"
+		Write-Verbose $tmpstring
+        
+        if ($Log) {Write-LogFile $tmpstring}
+    
+        $row=New-Object -TypeName PSObject
+		$row | Add-Member -MemberType NoteProperty -Name "Server" -Value $Srv.Name
+		$counter=Get-Counter "\MSExchange RpcClientAccess\User Count" -ComputerName $srv.Name
+		$row | Add-Member -MemberType NoteProperty -Name "RpcClientAccess" -Value $counter.CounterSamples[0].CookedValue
+        $counter=Get-Counter "\MSExchange OWA\Current Unique Users" -ComputerName $srv.Name
+		$row | Add-Member -MemberType NoteProperty -Name "Current Unique OWA Users" -Value $counter.CounterSamples[0].CookedValue
+        $counter=Get-Counter "\MSExchange ActiveSync\Current Requests" -ComputerName $srv.Name
+		$row | Add-Member -MemberType NoteProperty -Name "Current ActiveSync Requests" -Value $counter.CounterSamples[0].CookedValue
+        
+        $ConnectionsStatistics+=$row
+	}
+}
+    
+
+### End Collect Client Statistics
+
+if ($ConnectionsStatistics.Count -gt 0) {
+    
+    $statisticshtmltableheader = `
+    "<p>Client Connectivity Statistics:</p>
+	<p>
+	<table>
+	<tr>
+	<th>Server</th>
+	<th>RpcClientAccess</th>
+	<th>Current Unique OWA Users</th>
+	<th>Current ActiveSync Requests</th>
+	</tr>"
+	
+	$statisticshtml += $statisticshtmltableheader
+   
+    foreach ($stat in $ConnectionsStatistics){
+		$statisticshtmlrow = "<tr>"
+		$statisticshtmlrow += "<td>$($stat.server)</td>"
+
+		if($stat."RpcClientAccess" -lt $cascurrentrequestswarn){
+			$statisticshtmlrow += "<td class=""pass"">$($stat."RpcClientAccess")</td>"
+		} elseif($stat."RpcClientAccess" -gt $cascurrentrequestshigh) {
+			$statisticshtmlrow += "<td class=""fail"">$($stat."RpcClientAccess")</td>"
+			$statisticssummary += "$($stat.server) - Amount of RPC Client Access Users is too high."
+		} else {
+			$statisticshtmlrow += "<td class=""warn"">$($stat."RpcClientAccess")</td>"
+			$statisticssummary += "$($stat.server) - Amount of RPC Client Access Users is too high."
+		}
+
+		if($stat."Current Unique OWA Users" -lt $cascurrentrequestswarn){
+			$statisticshtmlrow += "<td class=""pass"">$($stat."Current Unique OWA Users")</td>"
+		} elseif($stat."Current Unique OWA Users" -gt $cascurrentrequestshigh) {
+			$statisticshtmlrow += "<td class=""fail"">$($stat."Current Unique OWA Users")</td>"
+			$statisticssummary += "$($stat.server) - Amount of Current Unique OWA Users is too high."
+		} else {
+			$statisticshtmlrow += "<td class=""warn"">$($stat."Current Unique OWA Users")</td>"
+			$statisticssummary += "$($stat.server) - Amount of Current Unique OWA Users is too high."
+		}
+
+		if($stat."Current ActiveSync Requests" -lt $cascurrentrequestswarn){
+		$statisticshtmlrow += "<td class=""pass"">$($stat."Current ActiveSync Requests")</td>"
+		} elseif($stat."Current ActiveSync Requests" -gt $cascurrentrequestshigh) {
+			$statisticshtmlrow += "<td class=""fail"">$($stat."Current ActiveSync Requests")</td>"
+			$statisticssummary += "$($stat.server) - Amount of Current ActiveSync Requests is too high."
+		} else {
+			$statisticshtmlrow += "<td class=""warn"">$($stat."Current ActiveSync Requests")</td>"
+			$statisticssummary += "$($stat.server) - Amount of Current ActiveSync Requests is too high."
+		}					
+		$statisticshtmlrow += "</tr>"
+
+		$statisticshtml += $statisticshtmlrow
+	}
+	$statisticshtml += "</table></p>"
+}
+else {
+    $statisticshtml = "<p>No Client Connectivity Statistics available</p>"
+}
+
+
+###
 Write-Host $string16
 ### Begin report generation
 if ($ReportMode -or $SendEmail)
@@ -1983,6 +2084,29 @@ if ($ReportMode -or $SendEmail)
 						<p>No Exchange DAG errors or warnings.</p>"
 	}
 
+	#Check if Client Connectivity Statistics summary
+	if($($statisticssummary.count) -gt 0)
+	{
+		#Set alert flag to true
+		$alerts = $true
+	
+		#Generate the HTML
+		$statisticssummaryhtml = "<h3>Client Connectivity Statistics Summary</h3>
+						<p>The following Client Connectivity Statistics errors and warnings were detected.</p>
+						<p>
+						<ul>"
+		foreach ($reportline in $statisticssummary)
+		{
+			$statisticssummaryhtml +="<li>$reportline</li>"
+		}
+		$statisticssummaryhtml += "</ul></p>"
+		$alerts = $true
+	} else
+	{
+		#Generate the HTML to show no alerts
+		$statisticssummaryhtml = "<h3>Client Connectivity Statistics Summary</h3>
+						<p>No Client Connectivity Statistics errors or warnings.</p>"
+	}
 
 	#Exchange Server Health Report Table Header
 	$htmltableheader = "<h3>Exchange Server Health</h3>
@@ -2080,8 +2204,7 @@ if ($ReportMode -or $SendEmail)
 	$htmltail = "</body>
 				</html>"
 
-	$htmlreport = $htmlhead + $serversummaryhtml + $dagsummaryhtml + $serverhealthhtmltable + $dagreportbody + $htmltail
-	
+	$htmlreport = $htmlhead + $serversummaryhtml + $dagsummaryhtml + $statisticssummaryhtml + $serverhealthhtmltable + $dagreportbody + $statisticshtml + $htmltail
 	if ($ReportMode -or $ReportFile)
 	{
 		$htmlreport | Out-File $ReportFile -Encoding UTF8
