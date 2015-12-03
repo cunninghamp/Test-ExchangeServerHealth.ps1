@@ -74,3 +74,4 @@ Additional Credits (code contributions and testing):
 - Bruce McKay
 - Tony Holdgate
 - Ryan
+- Przemyslaw Obiala, Wojciech Sciesinski
