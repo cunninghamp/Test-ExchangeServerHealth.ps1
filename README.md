@@ -22,6 +22,37 @@ $smtpsettings = @{
 	}
 ```
 
+When running the script on non-English servers you can modify the following variables in the script to match your language so that the script does not give errors or incorrect results.
+
+```
+#...................................
+# Modify these language 
+# localization strings.
+#...................................
+
+# The server roles must match the role names you see when you run Test-ServiceHealth.
+$casrole = "Client Access Server Role"
+$htrole = "Hub Transport Server Role"
+$mbrole = "Mailbox Server Role"
+$umrole = "Unified Messaging Server Role"
+
+# This should match the word for "Success", or the result of a successful Test-MAPIConnectivity test
+$success = "Success"
+```
+
+For example, a German system would use the following values:
+
+```
+# The server roles must match the role names you see when you run Test-ServiceHealth.
+$casrole = "Clientzugriffs-Serverrolle"
+$htrole = "Hub-Transport-Serverrolle"
+$mbrole = "Postfachserverrolle"
+$umrole = "Unified Messaging-Serverrolle"
+
+# This should match the word for "Success", or the result of a successful Test-MAPIConnectivity test
+$success = "Erfolgreich"
+```
+
 ## Parameters
 
 - **-Server**, Perform a health check of a single server
