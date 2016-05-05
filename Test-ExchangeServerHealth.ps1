@@ -73,30 +73,7 @@ Additional Credits (code contributions and testing):
 - Tony Holdgate
 - Ryan
 - Rob Silver
-
-License:
-
-The MIT License (MIT)
-
-Copyright (c) 2015 Paul Cunningham
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+- Damain Flynn
 
 Change Log
 V1.00, 5/07/2012 - Initial version
@@ -124,6 +101,7 @@ V1.12, 5/03/2015 - Fixed bug with color-coding in report for Transport Queue len
 V1.13, 7/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
 V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
+V1.16, 05/05/2016 - Added PS Remoting to support gathering Queue details from E2010
 #>
 
 #requires -version 2
@@ -191,12 +169,13 @@ $logfile = "$myDir\exchangeserverhealth.log"
 # Modify these Email Settings
 #...................................
 
-$smtpsettings = @{
-	To =  "administrator@exchangeserverpro.net"
-	From = "exchangeserver@exchangeserverpro.net"
-	Subject = "$reportemailsubject - $now"
-	SmtpServer = "smtp.exchangeserverpro.net"
-	}
+$smtpsettings = @{ 
+    To =  "administrator@exchangeserverpro.net" 
+    From = "exchangeserver@exchangeserverpro.net" 
+    Subject = "$reportemailsubject - $now" 
+    SmtpServer = "smtp.exchangeserverpro.net" 
+} 
+
 
 
 #...................................
@@ -682,11 +661,7 @@ foreach ($server in $exchangeservers)
 		Write-Host -ForegroundColor $warn $string0
 		if ($Log) {Write-Logfile $string0}
 	}
-	elseif ( $serverinfo.IsEdgeServer )
-	{
-		Write-Host -ForegroundColor White $string8
-		if ($Log) {Write-Logfile $string8}
-	}
+	
 	else
 	{
 		#Server is an Exchange server, continue the health check
@@ -873,7 +848,7 @@ foreach ($server in $exchangeservers)
 					#START - General Server Health Check
 					#Skipping Edge Transports for the general health check, as firewalls usually get
 					#in the way. If you want to include them, remove this If.
-					if ($IsEdge -ne $true)
+					#if ($IsEdge -ne $true)
 					{
 						#Service health is an array due to how multi-role servers return Test-ServiceHealth status
 						if ($Log) {Write-Logfile $string35}
@@ -955,13 +930,21 @@ foreach ($server in $exchangeservers)
 					#END - General Server Health Check
 
 					#START - Hub Transport Server Check
-					if ($IsHub)
+					if ($IsHub -or $IsEdge)
 					{
 						$q = $null
 						if ($Log) {Write-Logfile $string36}
 						Write-Host "Total Queue: " -NoNewline; 
 						try {
-							$q = Get-Queue -server $server -ErrorAction Stop
+                            if ($IsHub) {
+							    $q = Get-Queue -server $server -ErrorAction Stop
+                            } else {
+                                $PSSession = New-PSSession -ComputerName $server -ErrorAction       Continue
+                                If ( -not $PSSession ) { throw "Could not establish PS Remote Session to Exchange server $Server." }
+                                Invoke-Command -Session $PSSession -scriptblock { Add-PSSnapin Microsoft.Exchange.Management.PowerShell.E2010 }
+                                $q = Invoke-Command -Session $PSSession -scriptblock { get-queue }
+                                Remove-PSSession -Session $PSSession    
+                            }
 						}
 						catch {
 							$serversummary += "$server - $string6"
@@ -1001,6 +984,8 @@ foreach ($server in $exchangeservers)
 						}
 					}
 					#END - Hub Transport Server Check
+
+
 
 					#START - Mailbox Server Check
 					if ($IsMB)
@@ -2132,4 +2117,9 @@ if ($ReportMode -or $SendEmail)
 
 Write-Host $string15
 if ($Log) {Write-Logfile $string15}
+
+
+
+
+
 
