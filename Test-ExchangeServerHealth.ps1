@@ -961,7 +961,7 @@ foreach ($server in $exchangeservers)
 						if ($Log) {Write-Logfile $string36}
 						Write-Host "Total Queue: " -NoNewline; 
 						try {
-							$q = Get-Queue -server $server -ErrorAction Stop
+							$q = Get-Queue -server $server -ErrorAction Stop | Where {$_.Identity -notlike "*Shadow*"}
 						}
 						catch {
 							$serversummary += "$server - $string6"
