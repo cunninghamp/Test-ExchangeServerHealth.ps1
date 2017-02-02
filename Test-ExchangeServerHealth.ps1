@@ -73,6 +73,7 @@ Additional Credits (code contributions and testing):
 - Tony Holdgate
 - Ryan
 - Rob Silver
+- Romain Tiennot
 
 License:
 
@@ -124,6 +125,7 @@ V1.12, 5/03/2015 - Fixed bug with color-coding in report for Transport Queue len
 V1.13, 7/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
 V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
+V1.16, 2/02/2017 - Added Autosuspended Database, Queue function and Build version
 #>
 
 #requires -version 2
