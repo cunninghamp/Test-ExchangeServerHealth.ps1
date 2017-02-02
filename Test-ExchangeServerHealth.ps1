@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Test-ExchangeServerHealth.ps1 - Exchange Server Health Check Script.
 
@@ -302,6 +302,63 @@ $string69 = "DAG databases to check"
 # Functions
 #...................................
 
+function Get-QueueSum ($retry)
+{
+
+    $q = $null
+    if ($Log) {Write-Logfile $string36}
+        if($retry -gt 1){
+            Write-Host "FAIL, next tentative: ";
+        } else {
+            Write-Host "Total Queue: " -NoNewline;
+        }
+    try {
+	    $q = Get-Queue -server $server -ErrorAction Stop
+    }
+    catch {
+	    $serversummary += "$server - $string6"
+	    Write-Host -ForegroundColor $warn $string6
+	    Write-Warning $_.Exception.Message
+	    if ($Log) {Write-Logfile $string6}
+	    if ($Log) {Write-Logfile $_.Exception.Message}
+    }
+						
+    if ($q)
+    {
+	    $qcount = $q | Measure-Object MessageCount -Sum
+	    [int]$qlength = $qcount.sum
+	    $serverObj | Add-Member NoteProperty -Name "Queue Length" -Value $qlength -Force
+	    if ($Log) {Write-Logfile "Queue length is $qlength"}
+	    if ($qlength -le $transportqueuewarn)
+	    {
+		    Write-Host -ForegroundColor $pass $qlength
+		    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Pass ($qlength)" -Force
+	    }
+	    elseif ($qlength -gt $transportqueuewarn -and $qlength -lt $transportqueuehigh)
+	    {
+		    Write-Host -ForegroundColor $warn $qlength
+            $serversummary += "$server - Transport queue is above warning threshold" 
+		    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Warn ($qlength)" -Force
+	    }
+	    else
+	    {
+            if($retry -eq 5){
+		        Write-Host -ForegroundColor $fail $qlength
+                $serversummary += "$server - Transport queue is above high threshold"
+		        $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Fail ($qlength)" -Force
+            } else {
+                $retry++
+                Get-QueueSum -retry $retry
+                sleep(5)
+            }
+	    }
+    }
+    else
+    {
+	    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Unknown" -Force
+    }
+}
+
 #This function is used to generate HTML for the DAG member health report
 Function New-DAGMemberHTMLTableCell()
 {
@@ -365,7 +422,7 @@ Function Test-E15CASServiceHealth()
 		"MSExchangeADTopology",
 		"MSExchangeDiagnostics",
 		"MSExchangeFrontEndTransport",
-		#"MSExchangeHM",
+		"MSExchangeHM",
 		"MSExchangeIMAP4",
 		"MSExchangePOP3",
 		"MSExchangeServiceHost",
@@ -707,6 +764,7 @@ foreach ($server in $exchangeservers)
         }
 		
         #Null and n/a the rest, will be populated as script progresses
+        $serverObj | Add-Member NoteProperty -Name "BUILD" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "DNS" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "Ping" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "Uptime (hrs)" -Value $null
@@ -845,8 +903,13 @@ foreach ($server in $exchangeservers)
 
 				if ($ExVer -like "Version 15.1*")
 				{
-					$version = "Exchange 2016"
+					$version = $("Exchange 2016"+" "+$serverinfo.AdminDisplayVersion.major.ToString()+"."+$serverinfo.AdminDisplayVersion.minor.ToString())
 				}
+                if($version){
+                    $buildversion = $($serverinfo.AdminDisplayVersion.Build.ToString()+"."+$serverinfo.AdminDisplayVersion.Revision.ToString())
+                	$serverObj | Add-Member NoteProperty -Name "BUILD" -Value $buildversion -Force
+                    $buildversion = ''
+                }
 				
 				Write-Host $version
 				if ($Log) {Write-Logfile "Server is running $version"}
@@ -957,48 +1020,8 @@ foreach ($server in $exchangeservers)
 					#START - Hub Transport Server Check
 					if ($IsHub)
 					{
-						$q = $null
-						if ($Log) {Write-Logfile $string36}
-						Write-Host "Total Queue: " -NoNewline; 
-						try {
-							$q = Get-Queue -server $server -ErrorAction Stop
-						}
-						catch {
-							$serversummary += "$server - $string6"
-							Write-Host -ForegroundColor $warn $string6
-							Write-Warning $_.Exception.Message
-							if ($Log) {Write-Logfile $string6}
-							if ($Log) {Write-Logfile $_.Exception.Message}
-						}
-						
-						if ($q)
-						{
-							$qcount = $q | Measure-Object MessageCount -Sum
-							[int]$qlength = $qcount.sum
-							$serverObj | Add-Member NoteProperty -Name "Queue Length" -Value $qlength -Force
-							if ($Log) {Write-Logfile "Queue length is $qlength"}
-							if ($qlength -le $transportqueuewarn)
-							{
-								Write-Host -ForegroundColor $pass $qlength
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Pass ($qlength)" -Force
-							}
-							elseif ($qlength -gt $transportqueuewarn -and $qlength -lt $transportqueuehigh)
-							{
-								Write-Host -ForegroundColor $warn $qlength
-                                $serversummary += "$server - Transport queue is above warning threshold" 
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Warn ($qlength)" -Force
-							}
-							else
-							{
-								Write-Host -ForegroundColor $fail $qlength
-                                $serversummary += "$server - Transport queue is above high threshold"
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Fail ($qlength)" -Force
-							}
-						}
-						else
-						{
-							$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Unknown" -Force
-						}
+                        Get-QueueSum -retry 1
+
 					}
 					#END - Hub Transport Server Check
 
@@ -1515,10 +1538,10 @@ if ($($dags.count) -gt 0)
 			$laggedqueues = @($copies | Where-Object { ($_."Replay Lagged" -eq $true) -or ($_."Truncation Lagged" -eq $true) }).Count
 			$databaseObj | Add-Member NoteProperty -Name "Lagged Queues" -Value $laggedqueues -Force
 
-			$healthyindexes = @($copies | Where-Object { ($_."Content Index" -eq "Healthy" -or $_."Content Index" -eq "Disabled") }).Count
+			$healthyindexes = @($copies | Where-Object { ($_."Content Index" -eq "Healthy" -or $_."Content Index" -eq "Disabled" -or $_."Content Index" -eq "AutoSuspended")}).Count
 			$databaseObj | Add-Member NoteProperty -Name "Healthy Indexes" -Value $healthyindexes -Force
 			
-			$unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled") }).Count
+			$unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled" -and $_."Content Index" -ne "AutoSuspended")}).Count
 			$databaseObj | Add-Member NoteProperty -Name "Unhealthy Indexes" -Value $unhealthyindexes -Force
 			
 			$dagdatabaseSummary += $databaseObj
@@ -1632,7 +1655,7 @@ if ($($dags.count) -gt 0)
 				if ($($line.Preference) -gt 1)
 				{
 					$htmltablerow += "<td class=""warn"">$($line.Preference)</td>"
-					$dagsummary += "$($line.Database) - $string62 $($line.Preference)"
+					#$dagsummary += "$($line.Database) - $string62 $($line.Preference)"
 				}
 				else
 				{
@@ -2017,6 +2040,7 @@ if ($ReportMode -or $SendEmail)
 						<th>Site</th>
 						<th>Roles</th>
 						<th>Version</th>
+						<th>Build</th>
 						<th>DNS</th>
 						<th>Ping</th>
 						<th>Uptime (hrs)</th>
@@ -2040,7 +2064,8 @@ if ($ReportMode -or $SendEmail)
 		$htmltablerow += "<td>$($reportline.server)</td>"
 		$htmltablerow += "<td>$($reportline.site)</td>"
 		$htmltablerow += "<td>$($reportline.roles)</td>"
-		$htmltablerow += "<td>$($reportline.version)</td>"					
+		$htmltablerow += "<td>$($reportline.version)</td>"
+		$htmltablerow += "<td>$($reportline.BUILD)</td>"
 		$htmltablerow += (New-ServerHealthHTMLTableCell "dns")
 		$htmltablerow += (New-ServerHealthHTMLTableCell "ping")
 		
