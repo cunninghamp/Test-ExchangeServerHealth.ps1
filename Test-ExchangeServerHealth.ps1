@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 Test-ExchangeServerHealth.ps1 - Exchange Server Health Check Script.
 
@@ -73,6 +73,7 @@ Additional Credits (code contributions and testing):
 - Tony Holdgate
 - Ryan
 - Rob Silver
+- Romain Tiennot
 
 License:
 
@@ -124,6 +125,9 @@ V1.12, 5/03/2015 - Fixed bug with color-coding in report for Transport Queue len
 V1.13, 7/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
 V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
+V1.16, 2/02/2017 - Added Autosuspended Database, Queue function and Build version
+V1.17, 2/02/2017 - Added disk size check
+V1.18, 7/02/2017 - Add the size of the databases, the free space as well as the ratio
 #>
 
 #requires -version 2
@@ -153,7 +157,6 @@ param (
 
 	)
 
-
 #...................................
 # Variables
 #...................................
@@ -163,6 +166,12 @@ $date = $now.ToShortDateString()						#Short date format for email message subje
 [array]$exchangeservers = @()							#Array for the Exchange server or servers to check
 [int]$transportqueuehigh = 100							#Change this to set transport queue high threshold. Must be higher than warning threshold.
 [int]$transportqueuewarn = 80							#Change this to set transport queue warning threshold. Must be lower than high threshold.
+[int]$diskfreespacehigh = 15							
+[int]$diskfreespacewarn = 20	
+
+[int]$databaseoverspacehigh = 50							
+[int]$databaseoverspacewarn = 30	
+				
 $mapitimeout = 10										#Timeout for each MAPI connectivity test, in seconds
 $pass = "Green"
 $warn = "Yellow"
@@ -302,6 +311,63 @@ $string69 = "DAG databases to check"
 # Functions
 #...................................
 
+function Get-QueueSum ($retry)
+{
+
+    $q = $null
+    if ($Log) {Write-Logfile $string36}
+        if($retry -gt 1){
+            Write-Host "FAIL, next tentative: ";
+        } else {
+            Write-Host "Total Queue: " -NoNewline;
+        }
+    try {
+	    $q = Get-Queue -server $server -ErrorAction Stop
+    }
+    catch {
+	    $serversummary += "$server - $string6"
+	    Write-Host -ForegroundColor $warn $string6
+	    Write-Warning $_.Exception.Message
+	    if ($Log) {Write-Logfile $string6}
+	    if ($Log) {Write-Logfile $_.Exception.Message}
+    }
+						
+    if ($q)
+    {
+	    $qcount = $q | Measure-Object MessageCount -Sum
+	    [int]$qlength = $qcount.sum
+	    $serverObj | Add-Member NoteProperty -Name "Queue Length" -Value $qlength -Force
+	    if ($Log) {Write-Logfile "Queue length is $qlength"}
+	    if ($qlength -le $transportqueuewarn)
+	    {
+		    Write-Host -ForegroundColor $pass $qlength
+		    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Pass ($qlength)" -Force
+	    }
+	    elseif ($qlength -gt $transportqueuewarn -and $qlength -lt $transportqueuehigh)
+	    {
+		    Write-Host -ForegroundColor $warn $qlength
+            $serversummary += "$server - Transport queue is above warning threshold" 
+		    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Warn ($qlength)" -Force
+	    }
+	    else
+	    {
+            if($retry -eq 5){
+		        Write-Host -ForegroundColor $fail $qlength
+                $serversummary += "$server - Transport queue is above high threshold"
+		        $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Fail ($qlength)" -Force
+            } else {
+                $retry++
+                Get-QueueSum -retry $retry
+                sleep(5)
+            }
+	    }
+    }
+    else
+    {
+	    $serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Unknown" -Force
+    }
+}
+
 #This function is used to generate HTML for the DAG member health report
 Function New-DAGMemberHTMLTableCell()
 {
@@ -365,7 +431,7 @@ Function Test-E15CASServiceHealth()
 		"MSExchangeADTopology",
 		"MSExchangeDiagnostics",
 		"MSExchangeFrontEndTransport",
-		#"MSExchangeHM",
+		"MSExchangeHM",
 		"MSExchangeIMAP4",
 		"MSExchangePOP3",
 		"MSExchangeServiceHost",
@@ -707,6 +773,7 @@ foreach ($server in $exchangeservers)
         }
 		
         #Null and n/a the rest, will be populated as script progresses
+        $serverObj | Add-Member NoteProperty -Name "BUILD" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "DNS" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "Ping" -Value $null
 		$serverObj | Add-Member NoteProperty -Name "Uptime (hrs)" -Value $null
@@ -722,6 +789,22 @@ foreach ($server in $exchangeservers)
 		$serverObj | Add-Member NoteProperty -Name "MB DBs Mounted" -Value "n/a"
 		$serverObj | Add-Member NoteProperty -Name "Mail Flow Test" -Value "n/a"
 		$serverObj | Add-Member NoteProperty -Name "MAPI Test" -Value "n/a"
+
+		try 
+		{
+            $Disk = Get-WmiObject -Class Win32_volume -ComputerName $server -ErrorAction STOP
+            foreach ($d in $Disk | Where-Object {$_.DriveLetter -ne $null})
+            {
+                $valueDisk = $([math]::Round($d.FreeSpace*100/$d.capacity).ToString()+"%")
+		        $serverObj | Add-Member NoteProperty -Name $("##disk_"+$d.DriveLetter.replace(":","")) -Value $valueDisk
+            }
+		}
+		catch
+		{
+			Write-Host -ForegroundColor $warn $_.Exception.Message
+			if ($Log) {Write-Logfile $_.Exception.Message}
+		}
+			
 
 		#Check server name resolves in DNS
 		if ($Log) {Write-Logfile $string30}
@@ -806,10 +889,10 @@ foreach ($server in $exchangeservers)
 			{
 				$timespan = $OS.ConvertToDateTime($OS.LocalDateTime) – $OS.ConvertToDateTime($OS.LastBootUpTime)
 				[int]$uptime = "{0:00}" -f $timespan.TotalHours
-				Switch ($uptime -gt 23) {
+				Switch ($uptime -gt 3) {
 				    $true { Write-Host -ForegroundColor $pass $uptime }
-				    $false { Write-Host -ForegroundColor $warn $uptime; $serversummary += "$server - Uptime is less than 24 hours" }
-				    default { Write-Host -ForegroundColor $warn $uptime; $serversummary += "$server - Uptime is less than 24 hours" }
+				    $false { Write-Host -ForegroundColor $warn $uptime; $serversummary += "$server - Uptime is less than 3 hours" }
+				    default { Write-Host -ForegroundColor $warn $uptime; $serversummary += "$server - Uptime is less than 3 hours" }
 			    }
 			}
 
@@ -845,8 +928,13 @@ foreach ($server in $exchangeservers)
 
 				if ($ExVer -like "Version 15.1*")
 				{
-					$version = "Exchange 2016"
+					$version = $("Exchange 2016"+" "+$serverinfo.AdminDisplayVersion.major.ToString()+"."+$serverinfo.AdminDisplayVersion.minor.ToString())
 				}
+                if($version){
+                    $buildversion = $($serverinfo.AdminDisplayVersion.Build.ToString()+"."+$serverinfo.AdminDisplayVersion.Revision.ToString())
+                	$serverObj | Add-Member NoteProperty -Name "BUILD" -Value $buildversion -Force
+                    $buildversion = ''
+                }
 				
 				Write-Host $version
 				if ($Log) {Write-Logfile "Server is running $version"}
@@ -957,48 +1045,7 @@ foreach ($server in $exchangeservers)
 					#START - Hub Transport Server Check
 					if ($IsHub)
 					{
-						$q = $null
-						if ($Log) {Write-Logfile $string36}
-						Write-Host "Total Queue: " -NoNewline; 
-						try {
-							$q = Get-Queue -server $server -ErrorAction Stop | Where {$_.Identity -notlike "*Shadow*"}
-						}
-						catch {
-							$serversummary += "$server - $string6"
-							Write-Host -ForegroundColor $warn $string6
-							Write-Warning $_.Exception.Message
-							if ($Log) {Write-Logfile $string6}
-							if ($Log) {Write-Logfile $_.Exception.Message}
-						}
-						
-						if ($q)
-						{
-							$qcount = $q | Measure-Object MessageCount -Sum
-							[int]$qlength = $qcount.sum
-							$serverObj | Add-Member NoteProperty -Name "Queue Length" -Value $qlength -Force
-							if ($Log) {Write-Logfile "Queue length is $qlength"}
-							if ($qlength -le $transportqueuewarn)
-							{
-								Write-Host -ForegroundColor $pass $qlength
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Pass ($qlength)" -Force
-							}
-							elseif ($qlength -gt $transportqueuewarn -and $qlength -lt $transportqueuehigh)
-							{
-								Write-Host -ForegroundColor $warn $qlength
-                                $serversummary += "$server - Transport queue is above warning threshold" 
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Warn ($qlength)" -Force
-							}
-							else
-							{
-								Write-Host -ForegroundColor $fail $qlength
-                                $serversummary += "$server - Transport queue is above high threshold"
-								$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Fail ($qlength)" -Force
-							}
-						}
-						else
-						{
-							$serverObj | Add-Member NoteProperty -Name "Transport Queue" -Value "Unknown" -Force
-						}
+                        Get-QueueSum -retry 1
 					}
 					#END - Hub Transport Server Check
 
@@ -1360,6 +1407,9 @@ if ($($dags.count) -gt 0)
 				"Lagged Queues" = $null
 				"Healthy Indexes" = $null
 				"Unhealthy Indexes" = $null
+                "DB Size" = $null
+                "DB Free Space" = $null
+                "DB over space" = $null
 				}
 			$databaseObj = New-Object PSObject -Property $objectHash
 
@@ -1382,6 +1432,7 @@ if ($($dags.count) -gt 0)
 					"Replay Lagged" = $null
 					"Truncation Lagged" = $null
 					"Content Index" = $null
+                    "Disk Free Space" = $null
 					}
 				$dbcopyObj = New-Object PSObject -Property $objectHash
 				
@@ -1423,6 +1474,11 @@ if ($($dags.count) -gt 0)
                     $contentindexstate = $dbcopy.ContentIndexState
                 }
 				$tmpstring = "Content Index: $contentindexstate"
+				Write-Verbose $tmpstring
+				if ($Log) {Write-Logfile $tmpstring}
+
+				[int]$diskfreespace = $dbcopy.DiskFreeSpacePercent
+				$tmpstring = "Disk Free Space: $diskfreespace"
 				Write-Verbose $tmpstring
 				if ($Log) {Write-Logfile $tmpstring}				
 
@@ -1482,9 +1538,12 @@ if ($($dags.count) -gt 0)
 				$dbcopyObj | Add-Member NoteProperty -Name "Replay Lagged" -Value $replaylag -Force
 				$dbcopyObj | Add-Member NoteProperty -Name "Truncation Lagged" -Value $truncatelag -Force
 				$dbcopyObj | Add-Member NoteProperty -Name "Content Index" -Value $contentindexstate -Force
-				
+				$dbcopyObj | Add-Member NoteProperty -Name "Disk Free Space" -Value $diskfreespace -Force
+
 				$dagdbcopyReport += $dbcopyObj
 			}
+
+            $databaseOverSpace = [math]::Round($database.AvailableNewMailboxSpace.tomb()*100/$database.DatabaseSize.tomb())
 		
 			$copies = @($dagdbcopyReport | Where-Object { ($_."Database Name" -eq $database) })
 		
@@ -1515,12 +1574,18 @@ if ($($dags.count) -gt 0)
 			$laggedqueues = @($copies | Where-Object { ($_."Replay Lagged" -eq $true) -or ($_."Truncation Lagged" -eq $true) }).Count
 			$databaseObj | Add-Member NoteProperty -Name "Lagged Queues" -Value $laggedqueues -Force
 
-			$healthyindexes = @($copies | Where-Object { ($_."Content Index" -eq "Healthy" -or $_."Content Index" -eq "Disabled") }).Count
+			$healthyindexes = @($copies | Where-Object { ($_."Content Index" -eq "Healthy" -or $_."Content Index" -eq "Disabled" -or $_."Content Index" -eq "AutoSuspended")}).Count
 			$databaseObj | Add-Member NoteProperty -Name "Healthy Indexes" -Value $healthyindexes -Force
 			
-			$unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled") }).Count
+			$unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled" -and $_."Content Index" -ne "AutoSuspended")}).Count
 			$databaseObj | Add-Member NoteProperty -Name "Unhealthy Indexes" -Value $unhealthyindexes -Force
-			
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Size" -Value $database.DatabaseSize.togb().ToString() -Force
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Free Space" -Value $database.AvailableNewMailboxSpace.togb().ToString() -Force
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Over space" -Value $databaseOverSpace -Force
+
 			$dagdatabaseSummary += $databaseObj
 		
 		}
@@ -1607,6 +1672,9 @@ if ($($dags.count) -gt 0)
 							<th>Lagged Queues</th>
 							<th>Healthy Indexes</th>
 							<th>Unhealthy Indexes</th>
+                            <th>DB Size</th>
+                            <th>DB Free Space</th>
+                            <th>DB over space</th>
 							</tr>"
 
 			$dagdatabaseSummaryHtml += $htmltableheader
@@ -1632,7 +1700,7 @@ if ($($dags.count) -gt 0)
 				if ($($line.Preference) -gt 1)
 				{
 					$htmltablerow += "<td class=""warn"">$($line.Preference)</td>"
-					$dagsummary += "$($line.Database) - $string62 $($line.Preference)"
+					#$dagsummary += "$($line.Database) - $string62 $($line.Preference)"
 				}
 				else
 				{
@@ -1743,6 +1811,23 @@ if ($($dags.count) -gt 0)
 						default { $htmltablerow += "<td class=""warn"">$($line."Unhealthy Indexes")</td>" }
 					}
 				}
+
+                $htmltablerow += "<td class=""pass"">$($line."DB Size")</td>"
+                $htmltablerow += "<td class=""pass"">$($line."DB Free Space")</td>"
+			    if ($($line."DB over space") -lt $databaseoverspacewarn)
+			    {
+				    $htmltablerow += "<td class=""pass"">$($line."DB over space")%</td>"
+			    }
+                elseif($($line."DB over space")  -lt $databaseoverspacehigh)
+			    {
+				    $htmltablerow += "<td class=""warn"">$($line."DB over space")%</td>"
+					$dagsummary += "$($line.Database) - $($line."Mounted on") free space of the database is too large"
+                }
+			    else
+			    {
+				    $htmltablerow += "<td class=""fail"">$($line."DB over space")%</td>"
+					$dagsummary += "$($line.Database) - $($line."Mounted on") free space of the database is too large"
+			    }
 				
 				$htmltablerow += "</tr>"
 				$dagdatabaseSummaryHtml += $htmltablerow
@@ -1768,6 +1853,7 @@ if ($($dags.count) -gt 0)
 							<th>Replay Lagged</th>
 							<th>Truncation Lagged</th>
 							<th>Content Index</th>
+							<th>Disk Free Space</th>
 							</tr>"
 
 			$databasedetailsHtml += $htmltableheader
@@ -1827,8 +1913,24 @@ if ($($dags.count) -gt 0)
 				Switch ($($line."Content Index"))
 				{
 					"Healthy" { $htmltablerow += "<td class=""pass"">$($line."Content Index")</td>" }
+                    "AutoSuspended" { $htmltablerow += "<td class=""info"">$($line."Content Index")</td>" }
                     "Disabled" { $htmltablerow += "<td class=""info"">$($line."Content Index")</td>" }
 					default { $htmltablerow += "<td class=""warn"">$($line."Content Index")</td>" }
+				}
+
+				if ($($line."Disk Free Space") -lt $diskfreespacehigh)
+				{
+					$htmltablerow += "<td class=""fail"">$($line."Disk Free Space"+"%")</td>"
+					$dagsummary += "$($line."Database Name") on $($line."Mailbox Server") - low space disk $($line."Disk Free Space".tostring()+"%")"
+			    }
+                elseif($($line."Disk Free Space") -lt $diskfreespacewarn)
+				{
+					$htmltablerow += "<td class=""warn"">$($line."Disk Free Space".tostring()+"%")</td>"
+					$dagsummary += "$($line."Database Name") on $($line."Mailbox Server") - warning space disk $($line."Disk Free Space".tostring()+"%")"
+                }
+				else
+				{
+					$htmltablerow += "<td class=""pass"">$($line."Disk Free Space".tostring()+"%")</td>"
 				}
 				
 				$htmltablerow += "</tr>"
@@ -1957,56 +2059,6 @@ if ($ReportMode -or $SendEmail)
 				<h1 align=""center"">Exchange Server Health Check Report</h1>
 				<h3 align=""center"">Generated: $reportime</h3>"
 
-	#Check if the server summary has 1 or more entries
-	if ($($serversummary.count) -gt 0)
-	{
-		#Set alert flag to true
-		$alerts = $true
-	
-		#Generate the HTML
-		$serversummaryhtml = "<h3>Exchange Server Health Check Summary</h3>
-						<p>The following server errors and warnings were detected.</p>
-						<p>
-						<ul>"
-		foreach ($reportline in $serversummary)
-		{
-			$serversummaryhtml +="<li>$reportline</li>"
-		}
-		$serversummaryhtml += "</ul></p>"
-		$alerts = $true
-	}
-	else
-	{
-		#Generate the HTML to show no alerts
-		$serversummaryhtml = "<h3>Exchange Server Health Check Summary</h3>
-						<p>No Exchange server health errors or warnings.</p>"
-	}
-	
-	#Check if the DAG summary has 1 or more entries
-	if ($($dagsummary.count) -gt 0)
-	{
-		#Set alert flag to true
-		$alerts = $true
-	
-		#Generate the HTML
-		$dagsummaryhtml = "<h3>Database Availability Group Health Check Summary</h3>
-						<p>The following DAG errors and warnings were detected.</p>
-						<p>
-						<ul>"
-		foreach ($reportline in $dagsummary)
-		{
-			$dagsummaryhtml +="<li>$reportline</li>"
-		}
-		$dagsummaryhtml += "</ul></p>"
-		$alerts = $true
-	}
-	else
-	{
-		#Generate the HTML to show no alerts
-		$dagsummaryhtml = "<h3>Database Availability Group Health Check Summary</h3>
-						<p>No Exchange DAG errors or warnings.</p>"
-	}
-
 
 	#Exchange Server Health Report Table Header
 	$htmltableheader = "<h3>Exchange Server Health</h3>
@@ -2017,6 +2069,7 @@ if ($ReportMode -or $SendEmail)
 						<th>Site</th>
 						<th>Roles</th>
 						<th>Version</th>
+						<th>Build</th>
 						<th>DNS</th>
 						<th>Ping</th>
 						<th>Uptime (hrs)</th>
@@ -2028,8 +2081,17 @@ if ($ReportMode -or $SendEmail)
 						<th>PF DBs Mounted</th>
 						<th>MB DBs Mounted</th>
 						<th>MAPI Test</th>
-						<th>Mail Flow Test</th>
-						</tr>"
+						<th>Mail Flow Test</th>"
+                        $AllLetterDrive = @()
+                        foreach ($r in $report)
+                        {
+                            $AllLetterDrive += (($r | Get-Member).name | Where-Object {$_ -like "##disk_*"}).replace("##disk_","")
+                        }
+                        foreach ($DriveLetter in ($AllLetterDrive | Sort-Object -Unique))
+                        {
+                            $htmltableheader += "<th>$DriveLetter</th>"
+                        }
+	$htmltableheader += "</tr>"
 
 	#Exchange Server Health Report Table
 	$serverhealthhtmltable = $serverhealthhtmltable + $htmltableheader					
@@ -2040,7 +2102,8 @@ if ($ReportMode -or $SendEmail)
 		$htmltablerow += "<td>$($reportline.server)</td>"
 		$htmltablerow += "<td>$($reportline.site)</td>"
 		$htmltablerow += "<td>$($reportline.roles)</td>"
-		$htmltablerow += "<td>$($reportline.version)</td>"					
+		$htmltablerow += "<td>$($reportline.version)</td>"
+		$htmltablerow += "<td>$($reportline.BUILD)</td>"
 		$htmltablerow += (New-ServerHealthHTMLTableCell "dns")
 		$htmltablerow += (New-ServerHealthHTMLTableCell "ping")
 		
@@ -2094,8 +2157,24 @@ if ($ReportMode -or $SendEmail)
 		$htmltablerow += (New-ServerHealthHTMLTableCell "MB DBs Mounted")
 		$htmltablerow += (New-ServerHealthHTMLTableCell "MAPI Test")
 		$htmltablerow += (New-ServerHealthHTMLTableCell "Mail Flow Test")
+        foreach ($varDisk in ($reportline | Get-Member).name | Where-Object {$_ -like "##disk_*"})
+        {
+			if ($($reportline.$varDisk) -lt $diskfreespacehigh)
+			{
+				$htmltablerow += "<td class=""fail"">$($reportline.$varDisk)</td>"
+			    $serversummary += "$($reportline.server) - low space disk on $($varDisk.Replace("##disk_",'')) : $($reportline.$varDisk.tostring()))"
+			}
+            elseif($($reportline.$varDisk) -lt $diskfreespacewarn)
+			{
+				$htmltablerow += "<td class=""warn"">$($reportline.$varDisk)</td>"
+			    $serversummary += "$($reportline.server) - warning space disk on $($varDisk.Replace("##disk_",'')) : $($reportline.$varDisk.tostring()))"
+            }
+			else
+			{
+				$htmltablerow += "<td class=""pass"">$($reportline.$varDisk)</td>"
+			}
+        }
 		$htmltablerow += "</tr>"
-		
 		$serverhealthhtmltable = $serverhealthhtmltable + $htmltablerow
 	}
 
@@ -2103,6 +2182,56 @@ if ($ReportMode -or $SendEmail)
 
 	$htmltail = "</body>
 				</html>"
+
+    #Check if the server summary has 1 or more entries
+	if ($($serversummary.count) -gt 0)
+	{
+		#Set alert flag to true
+		$alerts = $true
+	
+		#Generate the HTML
+		$serversummaryhtml = "<h3>Exchange Server Health Check Summary</h3>
+						<p>The following server errors and warnings were detected.</p>
+						<p>
+						<ul>"
+		foreach ($reportline in $serversummary)
+		{
+			$serversummaryhtml +="<li>$reportline</li>"
+		}
+		$serversummaryhtml += "</ul></p>"
+		$alerts = $true
+	}
+	else
+	{
+		#Generate the HTML to show no alerts
+		$serversummaryhtml = "<h3>Exchange Server Health Check Summary</h3>
+						<p>No Exchange server health errors or warnings.</p>"
+	}
+	
+	#Check if the DAG summary has 1 or more entries
+	if ($($dagsummary.count) -gt 0)
+	{
+		#Set alert flag to true
+		$alerts = $true
+	
+		#Generate the HTML
+		$dagsummaryhtml = "<h3>Database Availability Group Health Check Summary</h3>
+						<p>The following DAG errors and warnings were detected.</p>
+						<p>
+						<ul>"
+		foreach ($reportline in $dagsummary)
+		{
+			$dagsummaryhtml +="<li>$reportline</li>"
+		}
+		$dagsummaryhtml += "</ul></p>"
+		$alerts = $true
+	}
+	else
+	{
+		#Generate the HTML to show no alerts
+		$dagsummaryhtml = "<h3>Database Availability Group Health Check Summary</h3>
+						<p>No Exchange DAG errors or warnings.</p>"
+	}
 
 	$htmlreport = $htmlhead + $serversummaryhtml + $dagsummaryhtml + $serverhealthhtmltable + $dagreportbody + $htmltail
 	
