@@ -1046,7 +1046,6 @@ foreach ($server in $exchangeservers)
 					if ($IsHub)
 					{
                         Get-QueueSum -retry 1
-
 					}
 					#END - Hub Transport Server Check
 
