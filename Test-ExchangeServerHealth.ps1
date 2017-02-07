@@ -127,6 +127,7 @@ V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue len
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
 V1.16, 2/02/2017 - Added Autosuspended Database, Queue function and Build version
 V1.17, 2/02/2017 - Added disk size check
+V1.18, 7/02/2017 - Add the size of the databases, the free space as well as the ratio
 #>
 
 #requires -version 2
@@ -166,7 +167,11 @@ $date = $now.ToShortDateString()						#Short date format for email message subje
 [int]$transportqueuehigh = 100							#Change this to set transport queue high threshold. Must be higher than warning threshold.
 [int]$transportqueuewarn = 80							#Change this to set transport queue warning threshold. Must be lower than high threshold.
 [int]$diskfreespacehigh = 15							
-[int]$diskfreespacewarn = 20							
+[int]$diskfreespacewarn = 20	
+
+[int]$databaseoverspacehigh = 50							
+[int]$databaseoverspacewarn = 30	
+				
 $mapitimeout = 10										#Timeout for each MAPI connectivity test, in seconds
 $pass = "Green"
 $warn = "Yellow"
@@ -1403,6 +1408,9 @@ if ($($dags.count) -gt 0)
 				"Lagged Queues" = $null
 				"Healthy Indexes" = $null
 				"Unhealthy Indexes" = $null
+                "DB Size" = $null
+                "DB Free Space" = $null
+                "DB over space" = $null
 				}
 			$databaseObj = New-Object PSObject -Property $objectHash
 
@@ -1535,6 +1543,8 @@ if ($($dags.count) -gt 0)
 
 				$dagdbcopyReport += $dbcopyObj
 			}
+
+            $databaseOverSpace = [math]::Round($database.AvailableNewMailboxSpace.tomb()*100/$database.DatabaseSize.tomb())
 		
 			$copies = @($dagdbcopyReport | Where-Object { ($_."Database Name" -eq $database) })
 		
@@ -1570,6 +1580,12 @@ if ($($dags.count) -gt 0)
 			
 			$unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled" -and $_."Content Index" -ne "AutoSuspended")}).Count
 			$databaseObj | Add-Member NoteProperty -Name "Unhealthy Indexes" -Value $unhealthyindexes -Force
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Size" -Value $database.DatabaseSize.togb().ToString() -Force
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Free Space" -Value $database.AvailableNewMailboxSpace.togb().ToString() -Force
+
+			$databaseObj | Add-Member NoteProperty -Name "DB Over space" -Value $databaseOverSpace -Force
 
 			$dagdatabaseSummary += $databaseObj
 		
@@ -1657,6 +1673,9 @@ if ($($dags.count) -gt 0)
 							<th>Lagged Queues</th>
 							<th>Healthy Indexes</th>
 							<th>Unhealthy Indexes</th>
+                            <th>DB Size</th>
+                            <th>DB Free Space</th>
+                            <th>DB over space</th>
 							</tr>"
 
 			$dagdatabaseSummaryHtml += $htmltableheader
@@ -1793,6 +1812,23 @@ if ($($dags.count) -gt 0)
 						default { $htmltablerow += "<td class=""warn"">$($line."Unhealthy Indexes")</td>" }
 					}
 				}
+
+                $htmltablerow += "<td class=""pass"">$($line."DB Size")</td>"
+                $htmltablerow += "<td class=""pass"">$($line."DB Free Space")</td>"
+			    if ($($line."DB over space") -lt $databaseoverspacewarn)
+			    {
+				    $htmltablerow += "<td class=""pass"">$($line."DB over space")%</td>"
+			    }
+                elseif($($line."DB over space")  -lt $databaseoverspacehigh)
+			    {
+				    $htmltablerow += "<td class=""warn"">$($line."DB over space")%</td>"
+					$dagsummary += "$($line.Database) - $($line."Mounted on") free space of the database is too large"
+                }
+			    else
+			    {
+				    $htmltablerow += "<td class=""fail"">$($line."DB over space")%</td>"
+					$dagsummary += "$($line.Database) - $($line."Mounted on") free space of the database is too large"
+			    }
 				
 				$htmltablerow += "</tr>"
 				$dagdatabaseSummaryHtml += $htmltablerow
