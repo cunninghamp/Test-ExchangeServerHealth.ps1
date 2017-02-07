@@ -105,3 +105,4 @@ Additional Credits (code contributions and testing):
 - Bruce McKay
 - Tony Holdgate
 - Ryan
+- Romain Tiennot
