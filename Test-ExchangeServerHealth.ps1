@@ -373,7 +373,7 @@ Function Test-E15CASServiceHealth()
                     )
         
     try {
-        $servicestates = @(Get-WmiObject -ComputerName $e15cas -Class Win32_Service -ErrorAction STOP | where {$casservices -icontains $_.Name} | select name,state,startmode)
+        $servicestates = @(Get-WmiObject -ComputerName $e15cas -Class Win32_Service -ErrorAction STOP | Where-Object {$casservices -icontains $_.Name} | Select-Object name,state,startmode)
     }
     catch
     {
@@ -384,8 +384,8 @@ Function Test-E15CASServiceHealth()
     
     if (!($e15casservicehealth))
     {
-        $servicesrunning = @($servicestates | Where {$_.StartMode -eq "Auto" -and $_.State -eq "Running"})
-        $servicesnotrunning = @($servicestates | Where {$_.Startmode -eq "Auto" -and $_.State -ne "Running"})
+        $servicesrunning = @($servicestates | Where-Object {$_.StartMode -eq "Auto" -and $_.State -eq "Running"})
+        $servicesnotrunning = @($servicestates | Where-Object {$_.Startmode -eq "Auto" -and $_.State -ne "Running"})
         if ($($servicesnotrunning.Count) -gt 0)
         {
             Write-Verbose "Service health check failed"
@@ -413,7 +413,7 @@ Function Test-E15MailFlow()
     $e15mailflowresult = $null
     
     Write-Verbose "Creating PSSession for $e15mailboxserver"
-    $url = (Get-PowerShellVirtualDirectory -Server $e15mailboxserver -AdPropertiesOnly | Where {$_.Name -eq "Powershell (Default Web Site)"}).InternalURL.AbsoluteUri
+    $url = (Get-PowerShellVirtualDirectory -Server $e15mailboxserver -AdPropertiesOnly | Where-Object {$_.Name -eq "Powershell (Default Web Site)"}).InternalURL.AbsoluteUri
     if ($url -eq $null)
     {
         $url = "http://$e15mailboxserver/powershell"
@@ -461,10 +461,10 @@ Function Test-E14ReplicationHealth()
     
     #Find an E14 CAS in the same site
     $ADSite = (Get-ExchangeServer $e14mailboxserver).Site
-    $e14cas = (Get-ExchangeServer | where {$_.IsClientAccessServer -and $_.AdminDisplayVersion -match "Version 14" -and $_.Site -eq $ADSite} | select -first 1).FQDN
+    $e14cas = (Get-ExchangeServer | Where-Object {$_.IsClientAccessServer -and $_.AdminDisplayVersion -match "Version 14" -and $_.Site -eq $ADSite} | Select-Object -first 1).FQDN
 
     Write-Verbose "Creating PSSession for $e14cas"
-    $url = (Get-PowerShellVirtualDirectory -Server $e14cas -AdPropertiesOnly | Where {$_.Name -eq "Powershell (Default Web Site)"}).InternalURL.AbsoluteUri
+    $url = (Get-PowerShellVirtualDirectory -Server $e14cas -AdPropertiesOnly | Where-Object {$_.Name -eq "Powershell (Default Web Site)"}).InternalURL.AbsoluteUri
     if ($url -eq $null)
     {
         $url = "http://$e14cas/powershell"
@@ -524,7 +524,7 @@ Write-Host $initstring0
 if ($Log) {Write-Logfile $initstring0}
 
 #Add Exchange 2010 snapin if not already loaded in the PowerShell session
-if (!(Get-PSSnapin | where {$_.Name -eq "Microsoft.Exchange.Management.PowerShell.E2010"}))
+if (!(Get-PSSnapin | Where-Object {$_.Name -eq "Microsoft.Exchange.Management.PowerShell.E2010"}))
 {
     Write-Verbose $initstring1
     if ($Log) {Write-Logfile $initstring1}
@@ -628,7 +628,7 @@ else
     #Get all servers
     Write-Verbose $string25
     if ($Log) {Write-Logfile $string25}
-    $tmpservers = @(Get-ExchangeServer | sort site,name)
+    $tmpservers = @(Get-ExchangeServer | Sort-Object site,name)
     
     #Remove the servers that are ignored from the list of servers to check
     Write-Verbose $string26
@@ -651,7 +651,7 @@ else
 }
 
 ### Check if any Exchange 2013 servers exist
-if (Get-ExchangeServer | Where {$_.AdminDisplayVersion -like "Version 15.*"})
+if (Get-ExchangeServer | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
 {
     [bool]$HasE15 = $true
 }
@@ -961,7 +961,7 @@ foreach ($server in $exchangeservers)
                         if ($Log) {Write-Logfile $string36}
                         Write-Host "Total Queue: " -NoNewline; 
                         try {
-                            $q = Get-Queue -server $server -ErrorAction Stop | Where {$_.DeliveryType -ne "ShadowRedundancy"}
+                            $q = Get-Queue -server $server -ErrorAction Stop | Where-Object {$_.DeliveryType -ne "ShadowRedundancy"}
                         }
                         catch {
                             $serversummary += "$server - $string6"
@@ -1009,11 +1009,11 @@ foreach ($server in $exchangeservers)
                         
                         #Get the PF and MB databases
                         [array]$pfdbs = @(Get-PublicFolderDatabase -server $server -status -WarningAction SilentlyContinue)
-                        [array]$mbdbs = @(Get-MailboxDatabase -server $server -status | Where {$_.Recovery -ne $true})
+                        [array]$mbdbs = @(Get-MailboxDatabase -server $server -status | Where-Object {$_.Recovery -ne $true})
                         
                         if ($version -ne "Exchange 2007")
                         {
-                            [array]$activedbs = @(Get-MailboxDatabase -server $server -status | Where {$_.Recovery -ne $true -and $_.MountedOnServer -eq ($serverinfo.fqdn)})
+                            [array]$activedbs = @(Get-MailboxDatabase -server $server -status | Where-Object {$_.Recovery -ne $true -and $_.MountedOnServer -eq ($serverinfo.fqdn)})
                         }
                         else
                         {
@@ -1427,7 +1427,7 @@ if ($($dags.count) -gt 0)
                 if ($Log) {Write-Logfile $tmpstring}                
 
                 #Checking whether this is a replay lagged copy
-                $replaylagcopies = @($database | Select -ExpandProperty ReplayLagTimes | Where-Object {$_.Value -gt 0})
+                $replaylagcopies = @($database | Select-Object -ExpandProperty ReplayLagTimes | Where-Object {$_.Value -gt 0})
                 if ($($replaylagcopies.count) -gt 0)
                 {
                     [bool]$replaylag = $false
@@ -1451,7 +1451,7 @@ if ($($dags.count) -gt 0)
                 if ($Log) {Write-Logfile $tmpstring}                
                         
                 #Checking for truncation lagged copies
-                $truncationlagcopies = @($database | Select -ExpandProperty TruncationLagTimes | Where-Object {$_.Value -gt 0})
+                $truncationlagcopies = @($database | Select-Object -ExpandProperty TruncationLagTimes | Where-Object {$_.Value -gt 0})
                 if ($($truncationlagcopies.count) -gt 0)
                 {
                     [bool]$truncatelag = $false
