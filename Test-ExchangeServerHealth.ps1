@@ -45,23 +45,23 @@ Checks all servers in the organization, outputs the results to the shell window,
 emails the HTML report to the address configured in the script.
 
 .LINK
-http://exchangeserverpro.com/powershell-script-health-check-report-exchange-2010
+https://practical365.com/exchange-server/powershell-script-exchange-server-health-check-report/
 
 .NOTES
 Written by: Paul Cunningham
 
 Find me on:
 
-* My Blog:    http://paulcunningham.me
-* Twitter:    https://twitter.com/paulcunningham
-* LinkedIn:    http://au.linkedin.com/in/cunninghamp/
-* Github:    https://github.com/cunninghamp
+* My Blog:	http://paulcunningham.me
+* Twitter:	https://twitter.com/paulcunningham
+* LinkedIn:	http://au.linkedin.com/in/cunninghamp/
+* Github:	https://github.com/cunninghamp
 
 For more Exchange Server tips, tricks and news
 check out Exchange Server Pro.
 
-* Website:    http://exchangeserverpro.com
-* Twitter:    http://twitter.com/exchservpro
+* Website:	https://practical365.com
+* Twitter:	https://twitter.com/practical365
 
 Additional Credits (code contributions and testing):
 - Chris Brown, http://twitter.com/chrisbrownie
@@ -78,7 +78,7 @@ License:
 
 The MIT License (MIT)
 
-Copyright (c) 2015 Paul Cunningham
+Copyright (c) 2017 Paul Cunningham
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -99,31 +99,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Change Log
-V1.00, 5/07/2012 - Initial version
-V1.01, 5/08/2012 - Minor bug fixes and removed Edge Tranport checks
-V1.02, 5/05/2013 - A lot of bug fixes, updated SMTP to use Send-MailMessage, added DAG health check.
-V1.03, 4/08/2013 - Minor bug fixes
+V1.00, 05/07/2012 - Initial version
+V1.01, 05/08/2012 - Minor bug fixes and removed Edge Tranport checks
+V1.02, 05/05/2013 - A lot of bug fixes, updated SMTP to use Send-MailMessage, added DAG health check.
+V1.03, 04/08/2013 - Minor bug fixes
 V1.04, 19/08/2013 - Added Exchange 2013 compatibility, added option to output a log file, converted many
                     sections of code to use pre-defined strings, fixed -AlertsOnly parameter, improved summary 
                     sections of report to be more readable and include DAG summary
 V1.05, 23/08/2013 - Added workaround for Test-ServiceHealth error for Exchange 2013 CAS-only servers
 V1.06, 28/10/2013 - Added workaround for Test-Mailflow error for Exchange 2013 Mailbox servers.
-                       - Added workaround for Exchange 2013 mail test.
-                       - Added localization strings for service health check errors for non-English systems.
-                       - Fixed an uptime calculation bug for some regional settings.
-                       - Excluded recovery databases from active database calculation.
-                       - Fixed bug where high transport queues would not count as an alert.
-                       - Fixed error thrown when Site attribute can't be found for Exchange 2003 servers.
-                       - Fixed bug causing Exchange 2003 servers to be added to the report twice.
+                  - Added workaround for Exchange 2013 mail test.
+				  - Added localization strings for service health check errors for non-English systems.
+				  - Fixed an uptime calculation bug for some regional settings.
+				  - Excluded recovery databases from active database calculation.
+				  - Fixed bug where high transport queues would not count as an alert.
+                  - Fixed error thrown when Site attribute can't be found for Exchange 2003 servers.
+                  - Fixed bug causing Exchange 2003 servers to be added to the report twice.
 V1.07, 24/11/2013 - Fixed bug where disabled content indexes were counted as failed.
 V1.08, 29/06/2014 - Fixed bug with DAG reporting in mixed Exchange 2010/2013 orgs.
-V1.09, 6/07/2014 - Fixed bug with DAG member replication health reporting for mixed Exchange 2010/2013 orgs.
+V1.09, 06/07/2014 - Fixed bug with DAG member replication health reporting for mixed Exchange 2010/2013 orgs.
 V1.10, 19/08/2014 - Fixed bug with E14 replication health not testing correct server.
 V1.11, 11/02/2015 - Added queue length to Transport queue result in report.
-V1.12, 5/03/2015 - Fixed bug with color-coding in report for Transport Queue length.
-V1.13, 7/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
-V1.14, 21/5/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
+V1.12, 05/03/2015 - Fixed bug with color-coding in report for Transport Queue length.
+V1.13, 07/03/2015 - Fixed bug with incorrect function name used sometimes when trying to call Write-LogFile
+V1.14, 21/05/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
+V1.16, 13/04/2017 - Fixed bugs with recovery DB detection, invalid variables, shadow redundancy queues, and lagged copy detection.
 #>
 
 #requires -version 2
