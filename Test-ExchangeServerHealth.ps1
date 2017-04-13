@@ -445,7 +445,7 @@ Function Test-E15MailFlow()
 	    $e15mailflowresult = "Fail"
 	}
 
-	Write-Verbose "Mail flow test: $testresult"
+	Write-Verbose "Mail flow test: $e15mailflowresult"
 	Write-Verbose "Removing PSSession"
 	Remove-PSSession $session.Id
 
