@@ -628,12 +628,12 @@ else
     #Get all servers
     Write-Verbose $string25
     if ($Log) {Write-Logfile $string25}
-    $tmpservers = @(Get-ExchangeServer | Sort-Object site,name)
+    $GetExchangeServerResults = @(Get-ExchangeServer | Sort-Object site,name)
     
     #Remove the servers that are ignored from the list of servers to check
     Write-Verbose $string26
     if ($Log) {Write-Logfile $string26}
-    foreach ($tmpserver in $tmpservers)
+    foreach ($tmpserver in $GetExchangeServerResults)
     {
         if (!($ignorelist -icontains $tmpserver.name))
         {
@@ -651,7 +651,7 @@ else
 }
 
 ### Check if any Exchange 2013 servers exist
-if (Get-ExchangeServer | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
+if ($GetExchangeServerResults | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
 {
     [bool]$HasE15 = $true
 }
@@ -1570,12 +1570,18 @@ if ($($dags.count) -gt 0)
             
             if ($HasE15)
             {
+                $DagMemberVer = ($GetExchangeServerResults | Where-Object {$_.Name -ieq $dagmember.Name}).AdminDisplayVersion.ToString()
+            }
+            
+
+            if ($DagMemberVer -like "Version 14.*")
+            {
                 if ($Log) {Write-Logfile "Using E14 replication health test workaround"}
                 $replicationhealth = Test-E14ReplicationHealth $dagmember
             }
             else
             {
-                $replicationhealth = $dagmember | Invoke-Command {Test-ReplicationHealth -ErrorAction STOP} 
+                $replicationhealth = Test-ReplicationHealth -Identity $dagmember
             }
             
             foreach ($healthitem in $replicationhealth)
