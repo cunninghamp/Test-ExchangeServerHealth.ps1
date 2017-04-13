@@ -1518,7 +1518,7 @@ if ($($dags.count) -gt 0)
             $healthyindexes = @($copies | Where-Object { ($_."Content Index" -eq "Healthy" -or $_."Content Index" -eq "Disabled" -or "Content Index" -eq "AutoSuspended") }).Count
             $databaseObj | Add-Member NoteProperty -Name "Healthy Indexes" -Value $healthyindexes -Force
             
-            $unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled" -or "Content Index" -ne "AutoSuspended") }).Count
+            $unhealthyindexes = @($copies | Where-Object { ($_."Content Index" -ne "Healthy" -and $_."Content Index" -ne "Disabled" -and "Content Index" -ne "AutoSuspended") }).Count
             $databaseObj | Add-Member NoteProperty -Name "Unhealthy Indexes" -Value $unhealthyindexes -Force
             
             $dagdatabaseSummary += $databaseObj
