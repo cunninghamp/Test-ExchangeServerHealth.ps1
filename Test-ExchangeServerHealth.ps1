@@ -1433,7 +1433,7 @@ if ($($dags.count) -gt 0)
 	                [bool]$replaylag = $false
 	                foreach ($replaylagcopy in $replaylagcopies)
 				    {
-					    if ($replaylagcopy.Key -eq $mailboxserver)
+					    if ($replaylagcopy.Key -ieq $mailboxserver)
 					    {
 						    $tmpstring = "$database is replay lagged on $mailboxserver"
 							Write-Verbose $tmpstring
