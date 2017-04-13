@@ -1558,14 +1558,14 @@ if ($($dags.count) -gt 0)
             Write-Verbose $tmpstring
             if ($Log) {Write-Logfile $tmpstring}
             
-            try
-            {
-                $replicationhealth = $dagmember | Invoke-Command {Test-ReplicationHealth -ErrorAction STOP} 
-            }
-            catch
+            if ($HasE15)
             {
                 if ($Log) {Write-Logfile "Using E14 replication health test workaround"}
                 $replicationhealth = Test-E14ReplicationHealth $dagmember
+            }
+            else
+            {
+                $replicationhealth = $dagmember | Invoke-Command {Test-ReplicationHealth -ErrorAction STOP} 
             }
             
             foreach ($healthitem in $replicationhealth)
