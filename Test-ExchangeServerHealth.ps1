@@ -1347,6 +1347,16 @@ if ($($dags.count) -gt 0)
             Write-Verbose $tmpstring
             if ($Log) {Write-Logfile $tmpstring}
 
+            $activationPref = $null
+            $totalcopies = $null
+            $healthycopies = $null
+            $unhealthycopies = $null
+            $healthyqueues  = $null
+            $unhealthyqueues = $null
+            $laggedqueues = $null
+            $healthyindexes = $null
+            $unhealthyindexes = $null
+
             #Custom object for Database
             $objectHash = @{
                             "Database" = $database.Identity
