@@ -1314,11 +1314,11 @@ if ($($dags.count) -gt 0)
 		#Get all databases in the DAG
         if ($HasE15)
         {
-		    $tmpdatabases = @(Get-MailboxDatabase -Status -IncludePreExchange2013 | Where-Object {$_.MasterServerOrAvailabilityGroup -eq $dag.Name} | Sort-Object Name)
+		    $tmpdatabases = @(Get-MailboxDatabase -Status -IncludePreExchange2013 | Where-Object {$_.Recovery -ne $true -and $_.MasterServerOrAvailabilityGroup -eq $dag.Name} | Sort-Object Name)
         }
         else
         {
-		    $tmpdatabases = @(Get-MailboxDatabase -Status | Where-Object {$_.MasterServerOrAvailabilityGroup -eq $dag.Name} | Sort-Object Name)
+		    $tmpdatabases = @(Get-MailboxDatabase -Status | Where-Object {$_.Recovery -ne $true -and $_.MasterServerOrAvailabilityGroup -eq $dag.Name} | Sort-Object Name)
         }
 
 		foreach ($tmpdatabase in $tmpdatabases)
