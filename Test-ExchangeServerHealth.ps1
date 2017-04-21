@@ -651,9 +651,20 @@ else
 }
 
 ### Check if any Exchange 2013 servers exist
-if ($GetExchangeServerResults | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
+[bool]$HasE15 = $false
+if ($GetExchangeServerResults -ne $null)
 {
-    [bool]$HasE15 = $true
+	if ($GetExchangeServerResults | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
+	{
+		[bool]$HasE15 = $true
+	}
+}
+else
+{
+	if ($exchangeservers | Where-Object {$_.AdminDisplayVersion -like "Version 15.*"})
+	{
+		[bool]$HasE15 = $true
+	}
 }
 
 ### Begin the Exchange Server health checks
