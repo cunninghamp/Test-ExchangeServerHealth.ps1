@@ -73,6 +73,7 @@ Additional Credits (code contributions and testing):
 - Tony Holdgate
 - Ryan
 - Rob Silver
+- andrewcr7, https://github.com/andrewcr7
 
 License:
 
@@ -125,6 +126,7 @@ V1.13, 07/03/2015 - Fixed bug with incorrect function name used sometimes when t
 V1.14, 21/05/2015 - Fixed bug with color-coding in report for Transport Queue length on CAS-only Exchange 2013 servers.
 V1.15, 18/11/2015 - Fixed bug with Exchange 2016 version detection.
 V1.16, 13/04/2017 - Fixed bugs with recovery DB detection, invalid variables, shadow redundancy queues, and lagged copy detection.
+V1.17, 17/05/2017 - Fixed bug with auto-suspended content index detection
 #>
 
 #requires -version 2
