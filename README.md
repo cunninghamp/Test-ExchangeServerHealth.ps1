@@ -97,7 +97,7 @@ check out Exchange Server Pro.
 * Twitter:	http://twitter.com/exchservpro
 
 Additional Credits (code contributions and testing):
-- Chris Brown, http://twitter.com/chrisbrownie
+- [Chris Brown](http://twitter.com/chrisbrownie)
 - Ingmar Brückner
 - John A. Eppright
 - Jonas Borelius
@@ -105,3 +105,4 @@ Additional Credits (code contributions and testing):
 - Bruce McKay
 - Tony Holdgate
 - Ryan
+- [@andrewcr7](https://github.com/andrewcr7)
