@@ -52,16 +52,10 @@ Written by: Paul Cunningham
 
 Find me on:
 
-* My Blog:	http://paulcunningham.me
+* My Blog:	https://paulcunningham.me
 * Twitter:	https://twitter.com/paulcunningham
-* LinkedIn:	http://au.linkedin.com/in/cunninghamp/
+* LinkedIn:	https://au.linkedin.com/in/cunninghamp/
 * Github:	https://github.com/cunninghamp
-
-For more Exchange Server tips, tricks and news
-check out Exchange Server Pro.
-
-* Website:	https://practical365.com
-* Twitter:	https://twitter.com/practical365
 
 Additional Credits (code contributions and testing):
 - Chris Brown, http://twitter.com/chrisbrownie
