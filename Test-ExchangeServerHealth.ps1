@@ -843,6 +843,12 @@ foreach ($server in $exchangeservers)
                 {
                     $version = "Exchange 2016"
                 }
+				
+				if ($ExVer -like "Version 15.2*")
+                {
+                    $version = "Exchange 2019"
+                }
+				
                 
                 Write-Host $version
                 if ($Log) {Write-Logfile "Server is running $version"}
@@ -1424,7 +1430,11 @@ if ($($dags.count) -gt 0)
                 {
                     $contentindexstate = "Disabled"
                 }
-                else
+                elseif ($($dbcopy.ContentIndexState -match "NotApplicable") -or $($dbcopy.ContentIndexState -match "11" ))
+                {
+                    $contentindexstate = "Healthy"
+                }
+				else
                 {
                     $contentindexstate = $dbcopy.ContentIndexState
                 }
