@@ -1406,7 +1406,9 @@ if ($($dags.count) -gt 0)
                 Write-Verbose $tmpstring
                 if ($Log) {Write-Logfile $tmpstring}
 
-                $pref = ($database | Select-Object -ExpandProperty ActivationPreference | Where-Object {$_.Key -ieq $mailboxserver}).Value
+                # Not sure how to correct the activation preference see my comments - CKH
+		
+		$pref = ($database | Select-Object -ExpandProperty ActivationPreference | Where-Object {$_.Key -ieq $mailboxserver}).Value
                 $tmpstring = "Activation Preference: $pref"
                 Write-Verbose $tmpstring
                 if ($Log) {Write-Logfile $tmpstring}
